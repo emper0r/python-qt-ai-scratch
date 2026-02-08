@@ -9,7 +9,7 @@ import requests
 from bs4 import BeautifulSoup
 from pypdf import PdfReader
 
-# Imports de PyQt6
+# Importaciones de PyQt6
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QTextEdit, QLineEdit, QLabel, 
                              QProgressBar, QGroupBox, QGridLayout, QPushButton, QScrollArea, QLayout,
@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QRect, QPoint, QSize
 from PyQt6.QtGui import QFont, QColor, QPalette, QPainter, QBrush
 
-# --- Configuración y Globales (Configuration & Globals) ---
+# --- Configuración y Globales ---
 CONFIG_PATH = "config.json"
 DEFAULT_CONFIG = {
     "hidden_neurons": 32,
@@ -33,8 +33,8 @@ try:
 except FileNotFoundError:
     CONFIG = DEFAULT_CONFIG
 
-# --- Funciones Auxiliares (Helper Functions) ---
-# (Se mantienen igual que antes - Core Logic)
+# --- Funciones Auxiliares ---
+
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
@@ -46,9 +46,21 @@ def softmax(x):
     return e_x / e_x.sum(axis=0)
 
 # --- El Cerebro de la IA (Red Neuronal) ---
-# (Se mantiene igual - Core Logic)
 class SimpleAI:
+    """
+    Implementación simple de una red neuronal para el aprendizaje de secuencias.
+    """
+
     def __init__(self, input_size, hidden_size, output_size, learning_rate):
+        """
+        Inicializa la red neuronal.
+
+        Args:
+            input_size (int): Tamaño de la capa de entrada.
+            hidden_size (int): Número de neuronas en la capa oculta.
+            output_size (int): Tamaño de la capa de salida (vocabulario).
+            learning_rate (float): Tasa de aprendizaje para el descenso de gradiente.
+        """
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.output_size = output_size
@@ -66,10 +78,20 @@ class SimpleAI:
 
     @property
     def total_parameters(self):
+        """Calcula el número total de parámetros (pesos + sesgos) en la red."""
         # W1 + b1 + W2 + b2
         return (self.W1.size + self.b1.size + self.W2.size + self.b2.size)
 
     def forward(self, inputs):
+        """
+        Realiza la propagación hacia adelante (forward pass).
+
+        Args:
+            inputs (np.array): Vector de entrada.
+        
+        Returns:
+            np.array: Probabilidades de salida (Softmax).
+        """
         self.last_input = inputs
         self.z1 = np.dot(self.W1, inputs) + self.b1
         self.a1 = sigmoid(self.z1)
@@ -81,6 +103,13 @@ class SimpleAI:
         return self.output
 
     def train(self, inputs, targets):
+        """
+        Entrena la red usando retropropagación (backpropagation).
+
+        Args:
+            inputs (np.array): Vector de entrada.
+            targets (np.array): Vector objetivo (one-hot).
+        """
         outputs = self.forward(inputs)
         d_z2 = outputs - targets
         d_W2 = np.dot(d_z2, self.a1.T)
@@ -110,7 +139,7 @@ class SimpleAI:
         with open(filepath, 'r') as f:
             data = json.load(f)
             
-            # Validate shapes before loading
+            # Validar formas antes de cargar
             W1 = np.array(data["W1"])
             b1 = np.array(data["b1"])
             W2 = np.array(data["W2"])
@@ -123,39 +152,40 @@ class SimpleAI:
             self.b2 = b2
 
     def expand_vocab(self, new_vocab_size):
+        """Expande dinámicamente la arquitectura de la red para acomodar un nuevo tamaño de vocabulario."""
         if new_vocab_size <= self.output_size:
-            return # Nothing to do
+            return # Nada que hacer
 
         old_vocab = self.output_size
         diff = new_vocab_size - old_vocab
-        window_size = int(self.input_size / old_vocab) # Infer window size
+        window_size = int(self.input_size / old_vocab) # Inferir tamaño de ventana
         
-        # 1. Expand W1 (Input -> Hidden)
-        # W1 shape: (Hidden, Window * OldVocab)
-        # We need: (Hidden, Window * NewVocab)
-        # But simply appending columns is WRONG because of the window structure.
-        # We must insert 'diff' columns every 'old_vocab' columns.
+        # 1. Expandir W1 (Entrada -> Oculta)
+        # Forma W1: (Oculta, Ventana * VocabViejo)
+        # Necesitamos: (Oculta, Ventana * VocabNuevo)
+        # Pero simplemente añadir columnas es INCORRECTO debido a la estructura de ventana.
+        # Debemos insertar 'diff' columnas cada 'old_vocab' columnas.
         
-        # Reshape to (Hidden, Window, OldVocab)
+        # Redimensionar a (Oculta, Ventana, VocabViejo)
         W1_reshaped = self.W1.reshape(self.hidden_size, window_size, old_vocab)
         
-        # New random weights for new words
+        # Nuevos pesos aleatorios para nuevas palabras
         new_cols = np.random.uniform(-0.5, 0.5, (self.hidden_size, window_size, diff))
         
-        # Concatenate along the Vocab axis (axis 2)
+        # Concatenar a lo largo del eje Vocab (eje 2)
         W1_expanded = np.concatenate((W1_reshaped, new_cols), axis=2)
         
-        # Flatten back to (Hidden, Window * NewVocab)
+        # Aplanar de nuevo a (Oculta, Ventana * VocabNuevo)
         self.W1 = W1_expanded.reshape(self.hidden_size, window_size * new_vocab_size)
         self.input_size = self.W1.shape[1]
 
-        # 2. Expand W2 (Hidden -> Output)
-        # W2 shape: (OldVocab, Hidden). Just append rows.
+        # 2. Expandir W2 (Oculta -> Salida)
+        # Forma W2: (VocabViejo, Oculta). Solo añadir filas.
         new_rows = np.random.uniform(-0.5, 0.5, (diff, self.hidden_size))
-        self.W2 = np.vstack((self.W2, new_rows))
+        self.W2 = np.vstack((self.W2, new_rows)) # 3. Expand W2 (Hidden -> Output)
 
-        # 3. Expand b2 (Output Bias)
-        # b2 shape: (OldVocab, 1)
+        # 3. Expandir b2 (Sesgo de Salida)
+        # Forma b2: (VocabViejo, 1)
         new_bias = np.zeros((diff, 1))
         self.b2 = np.vstack((self.b2, new_bias))
         
@@ -170,15 +200,15 @@ class SimpleAI:
         }
 
     def set_weights_dict(self, data):
-        # Validate shapes before loading
+        # Validar formas antes de cargar
         W1 = np.array(data["W1"])
         b1 = np.array(data["b1"])
         W2 = np.array(data["W2"])
         b2 = np.array(data["b2"])
         
         if W1.shape != self.W1.shape or W2.shape != self.W2.shape:
-             # Try to provide helpful error
-             raise ValueError(f"Architecture Mismatch: Saved {W1.shape}/{W2.shape}, Current {self.W1.shape}/{self.W2.shape}")
+             # Intentar proveer un error útil
+             raise ValueError(f"Desajuste de Arquitectura: Guardado {W1.shape}/{W2.shape}, Actual {self.W1.shape}/{self.W2.shape}")
             
         self.W1 = W1
         self.b1 = b1
@@ -189,6 +219,7 @@ class SimpleAI:
 # (Se mantiene igual - Core Logic)
 # --- Manejador de Datos (Data Handler) ---
 class DataHandler:
+    """Maneja el preprocesamiento de texto y la codificación/decodificación de tokens."""
     def __init__(self, mode="char"):
         self.mode = mode
         if self.mode == "char":
@@ -197,16 +228,16 @@ class DataHandler:
             self.ix_to_token = { i:ch for i,ch in enumerate(self.chars) }
             self.vocab_size = len(self.chars)
         else:
-            # Word mode: Vocabulario dinámico básico inicial
+            # Modo palabra: Vocabulario dinámico básico inicial
             self.tokens = ["<UNK>", "<PAD>", "\n"] 
             self.token_to_ix = { t:i for i,t in enumerate(self.tokens) }
             self.ix_to_token = { i:t for i,t in enumerate(self.tokens) }
             self.vocab_size = len(self.tokens)
 
     def learn_vocab(self, text):
-        if self.mode == "char": return # Static vocab
+        if self.mode == "char": return # Vocabulario estático
         
-        # Simple split by space, keeping newlines
+        # División simple por espacios, manteniendo saltos de línea
         words = text.replace("\n", " \n ").split(" ")
         new_tokens = set(words)
         
@@ -229,13 +260,13 @@ class DataHandler:
         if self.mode == "char":
             return [self.token_to_ix.get(c, 0) for c in text]
         else:
-            # Word encoding
+            # Codificación de palabras
             words = text.replace("\n", " \n ").split(" ")
             encoded = []
             for w in words:
                 w = w.strip()
                 if not w: continue
-                encoded.append(self.token_to_ix.get(w, 0)) # 0 is UNK
+                encoded.append(self.token_to_ix.get(w, 0)) # 0 es UNK
             return encoded
         
     def vector_from_token(self, token):
@@ -260,7 +291,7 @@ class DataHandler:
                 with open(path, 'r', encoding='utf-8', errors='ignore') as f:
                     content = f.read()
             
-            # Auto-learn vocab if in word mode
+            # Auto-aprender vocabulario si está en modo palabra
             if self.mode == "word":
                 self.learn_vocab(content)
                 
@@ -270,10 +301,10 @@ class DataHandler:
 
     def load_url(self, url):
         try:
-            # Add headers to mimic browser and avoid blocking (403 Forbidden)
+            # Añadir cabeceras para imitar navegador y evitar bloqueos (403 Forbidden)
             headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
             resp = requests.get(url, headers=headers, timeout=10)
-            resp.raise_for_status() # Raise error for bad status codes
+            resp.raise_for_status() # Lanzar error si el status es malo
             
             content_type = resp.headers.get('content-type', '').lower()
             
@@ -324,9 +355,10 @@ class DataHandler:
 from PyQt6.QtGui import QFont, QColor, QPalette, QPainter, QBrush
 from PyQt6.QtCore import Qt
 
-# --- Custom Widgets ---
-# --- Custom Flow Layout ---
+# --- Widgets Personalizados ---
+# --- Layout de Flujo Personalizado ---
 class FlowLayout(QLayout):
+    """Layout que acomoda widgets en flujo (como texto), ajustándose al ancho."""
     def __init__(self, parent=None, margin=0, spacing=-1):
         super(FlowLayout, self).__init__(parent)
         if parent is not None:
@@ -402,6 +434,7 @@ class FlowLayout(QLayout):
         return y + lineHeight - rect.y()
 
 class NeuronVUMeter(QWidget):
+    """Widget gráfico que muestra la activación de una neurona (estilo vúmetro)."""
     def __init__(self, id_num):
         super().__init__()
         self.setFixedSize(34, 110) # Mayor altura para info
@@ -411,28 +444,28 @@ class NeuronVUMeter(QWidget):
         
     def set_activation(self, value):
         self.value = value
-        self.repaint() # Force redraw
+        self.repaint() # Forzar redibujado
         
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         
-        # Dimensions
+        # Dimensiones
         w = self.width()
         h = self.height()
         
-        header_h = 15 # ID space (Top)
-        footer_h = 20 # Value space (Bottom)
+        header_h = 15 # Espacio para ID (Arriba)
+        footer_h = 20 # Espacio para Valor (Abajo)
         bar_h = h - header_h - footer_h
         
-        # 1. Draw ID (Top)
+        # 1. Dibujar ID (Arriba)
         painter.setPen(QColor("#666"))
         painter.setFont(QFont("Courier New", 8, QFont.Weight.Bold))
         # Rect: x, y, w, h
         painter.drawText(0, 0, w, header_h, Qt.AlignmentFlag.AlignCenter, f"{self.id:02}")
         
-        # 2. Draw Value (Bottom)
-        # Highlight if value is high
+        # 2. Dibujar Valor (Abajo)
+        # Resaltar si el valor es alto
         if self.value > 0.5:
             painter.setPen(QColor("#ffffff"))
             painter.setFont(QFont("Courier New", 9, QFont.Weight.Bold))
@@ -441,52 +474,53 @@ class NeuronVUMeter(QWidget):
             painter.setFont(QFont("Courier New", 8))
             
         val_str = f"{self.value:.1f}" if self.value < 1.0 else "1.0"
-        if self.value < 0.01: val_str = "." # Minimal noise
+        if self.value < 0.01: val_str = "." # Ruido mínimo
         
         painter.drawText(0, h - footer_h, w, footer_h, Qt.AlignmentFlag.AlignCenter, val_str)
         
-        # 3. Draw Segments (Middle)
+        # 3. Dibujar Segmentos (Medio)
         seg_total_h = bar_h / self.segments
         gap = 1
         seg_h = seg_total_h - gap
         
         active_segments = int(self.value * self.segments)
         
-        # Start Y position for bar (after header)
-        bar_start_y = header_h 
+        # Posición Y de inicio para la barra (tras cabecera)
+        bar_start_y = header_h  
         
         for i in range(self.segments):
-            # Calculate position (Bottom Up within the bar area)
-            # Row 0 is bottom-most segment, Row segments-1 is top-most
+            # Calcular posición (De abajo hacia arriba dentro del área de la barra)
+            # Fila 0 es el segmento inferior, Fila segments-1 es el superior
             row = i 
             
-            # Y coord: Base + Height - ((row + 1) * total_seg_height)
-            # We want row 0 at the bottom of bar_h area
+            # Coord Y: Base + Altura - ((fila + 1) * altura_total_seg)
+            # Queremos fila 0 al fondo del área bar_h
             y = bar_start_y + bar_h - ((row + 1) * seg_total_h)
             
-            # Determine Color
+            # Determinar Color
             is_on = row < active_segments
             
             if not is_on:
-                color = QColor("#222") # Off (darker background)
+                color = QColor("#222") # Apagado (fondo más oscuro)
             else:
-                # Gradient: Green -> Yellow -> Red
+                # Gradiente: Verde -> Amarillo -> Rojo
                 pct = row / self.segments
                 if pct < 0.6:
                     color = QColor("#00ff00") # Green
                 elif pct < 0.8:
-                    color = QColor("#ffff00") # Yellow
+                    color = QColor("#ffff00") # Amarillo
                 else:
-                    color = QColor("#ff0033") # Red
+                    color = QColor("#ff0033") # Rojo
             
             painter.setBrush(QBrush(color))
             painter.setPen(Qt.PenStyle.NoPen)
-            # Margin left/right to center bar
+            # Margen izq/der para centrar barra
             painter.drawRect(4, int(y), w - 8, int(seg_h))
 
-# --- PyQt Worker Threads ---
+# --- Hilos de Trabajo PyQt (Workers) ---
 class TrainingWorker(QThread):
-    progress_signal = pyqtSignal(str, str) # char, current_full_buffer
+    """Hilo en segundo plano para el entrenamiento de la red."""
+    progress_signal = pyqtSignal(str, str) # char, buffer_completo_actual
     update_signal = pyqtSignal()
 
     def __init__(self, ai, data_handler, text, window_size, start_context):
@@ -509,14 +543,14 @@ class TrainingWorker(QThread):
                  tokens = self.text.replace("\n", " \n ").split(" ")
                  tokens = [t.strip() for t in tokens if t.strip()]
 
-            # Debug check
+            # Verificación de Debug
             if hasattr(self.data_handler, 'vocab_size'):
                  input_dim = self.data_handler.vocab_size * self.window_size
                  if self.ai.input_size != input_dim:
-                     msg = f"CRITICAL: InputMismatch Brain({self.ai.input_size}) != Data({input_dim})"
+                     msg = f"CRITICO: Desajuste de Entrada Brain({self.ai.input_size}) != Data({input_dim})"
                      print(msg)
                      self.progress_signal.emit(msg, self.context_buffer)
-                     # Attempt to fix IF strictly necessary, or just abort
+                     # Intentar arreglar SI es estrictamente necesario, o simplemente abortar
                      return
 
             for token in tokens:
@@ -537,7 +571,7 @@ class TrainingWorker(QThread):
                     context_indices = context_indices[-self.window_size:]
                     
                 for i, ix in enumerate(context_indices):
-                    # Safety check index
+                    # Comprobación de seguridad del índice
                     if ix >= self.data_handler.vocab_size: 
                          continue
                          
@@ -546,7 +580,7 @@ class TrainingWorker(QThread):
                 target_vec = self.data_handler.vector_from_token(token)
                 self.ai.train(input_vec, target_vec)
                 
-                # Slide context
+                # Deslizar contexto (Slide context)
                 if self.data_handler.mode == "char":
                     self.context_buffer = self.context_buffer[1:] + token
                 else:
@@ -569,7 +603,8 @@ class TrainingWorker(QThread):
             self.progress_signal.emit(f"[ERR:{e}]", self.context_buffer)
 
 class GenerationWorker(QThread):
-    progress_signal = pyqtSignal(str, str) # char_generated, current_full_buffer
+    """Hilo en segundo plano para la generación de texto por la IA."""
+    progress_signal = pyqtSignal(str, str) # char_generado, buffer_completo_actual
     update_signal = pyqtSignal()
     finished_signal = pyqtSignal()
 
@@ -603,7 +638,7 @@ class GenerationWorker(QThread):
             ix = np.random.choice(range(len(flat_probs)), p=flat_probs)
             token = self.data_handler.ix_to_token[ix]
             
-            # Update context
+            # Actualizar contexto
             if self.data_handler.mode == "char":
                 self.context_buffer = self.context_buffer[1:] + token
                 display_token = token
@@ -612,7 +647,7 @@ class GenerationWorker(QThread):
                 words = self.context_buffer.split(" ")
                 if len(words) > self.window_size + 10:
                     self.context_buffer = " ".join(words[-(self.window_size+5):])
-                display_token = " " + token # Add space for display readability
+                display_token = " " + token # Añadir espacio para legibilidad en pantalla
             
             self.progress_signal.emit(display_token, self.context_buffer)
             self.update_signal.emit()
@@ -621,8 +656,12 @@ class GenerationWorker(QThread):
             
         self.finished_signal.emit()
 
-# --- PyQt Main Window ---
+# --- Ventana Principal PyQt ---
 class EduAIWindow(QMainWindow):
+    """
+    Ventana principal de la aplicación.
+    Muestra la visualización de neuronas, predicciones y controles.
+    """
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Educational AI - Neural Network Visualizer")
@@ -728,7 +767,7 @@ class EduAIWindow(QMainWindow):
             }
         """)
         
-        # Initialize items
+        # Inicializar items
         for r in range(20):
             self.table_preds.setItem(r, 0, QTableWidgetItem("-"))
             self.table_preds.setItem(r, 1, QTableWidgetItem("0%"))
@@ -741,7 +780,7 @@ class EduAIWindow(QMainWindow):
         
         main_layout.addLayout(viz_layout, stretch=3)
         
-        # --- SECCIÓN MEDIA: INFO y MEMORIA ---
+        # --- SECCIÓN MEDIA: INFO BAR ---
         info_layout = QHBoxLayout()
         self.lbl_config = QLabel(f"Neuronas: {CONFIG['hidden_neurons']} | LR: {CONFIG['learning_rate']}")
         self.lbl_params = QLabel("Params: 0")
@@ -749,12 +788,7 @@ class EduAIWindow(QMainWindow):
         
         self.lbl_status = QLabel("Estado: ESPERANDO")
         self.lbl_status.setStyleSheet("color: #ffa500; font-weight: bold;")
-        # --- SECCIÓN MEDIA: INFO BAR ---
-        info_layout = QHBoxLayout()
-        self.lbl_config = QLabel(f"Neuronas: {CONFIG['hidden_neurons']} | LR: {CONFIG['learning_rate']}")
-        self.lbl_params = QLabel("Params: 0")
-        self.lbl_params.setStyleSheet("color: #00ffff; font-weight: bold; margin-left: 10px;")
-        
+
         current_mode = CONFIG.get("token_mode", "char").upper()
         self.btn_switch = QPushButton(f"Modo: {current_mode} (Cambiar)")
         self.btn_switch.clicked.connect(self.toggle_mode)
@@ -762,7 +796,7 @@ class EduAIWindow(QMainWindow):
 
         info_layout.addWidget(self.lbl_config)
         info_layout.addWidget(self.lbl_params) 
-        info_layout.addWidget(self.btn_switch) # Add switch button
+        info_layout.addWidget(self.btn_switch) # Añadir botón de cambio
         info_layout.addStretch()
         info_layout.addWidget(self.lbl_status)
         main_layout.addLayout(info_layout)
@@ -802,13 +836,13 @@ class EduAIWindow(QMainWindow):
         
         self.stats_group.setLayout(self.stats_layout)
         
-        # Add to bottom layout with stretch factors matching top
-        bottom_layout.addWidget(self.memory_group, stretch=3) # Match Neurons stretch
-        bottom_layout.addWidget(self.stats_group, stretch=1)  # Match Preds stretch
+        # Añadir al layout inferior con factores de estiramiento correctos
+        bottom_layout.addWidget(self.memory_group, stretch=3) # Coincide con Neuronas
+        bottom_layout.addWidget(self.stats_group, stretch=1)  # Coincide con Predicciones
         
         main_layout.addLayout(bottom_layout, stretch=1)
         
-        # Input Area (Footer)
+        # Área de Entrada (Footer)
         input_layout = QHBoxLayout()
         self.input_field = QLineEdit()
         self.input_field.setPlaceholderText("Escribe texto o /gen 50, /load, /url, /cfg...")
@@ -820,8 +854,7 @@ class EduAIWindow(QMainWindow):
         self.log("Bienvenido. Escribe para entrenar o usa /gen 20 para dejar que la IA responda.")
         
         # AUTOLOAD: Intentar cargar cerebro con nombre correcto
-        # AUTOLOAD: Intentar cargar cerebro con nombre correcto
-        # load_brain now handles bundling and resizing!
+        # load_brain ahora maneja el empaquetado y redimensionamiento!
         success, msg = self.load_brain()
         if success:
              self.log(f"MEMORIA CARGADA: {msg}")
@@ -830,12 +863,12 @@ class EduAIWindow(QMainWindow):
                  
         self.update_stats()
         
-        # Real-time Stats Timer (2s loop)
+        # Timer de Estadísticas en Tiempo Real (bucle 2s)
         self.stats_timer = QTimer(self)
         self.stats_timer.timeout.connect(self.update_stats)
         self.stats_timer.start(2000)
 
-        # Bring to front on MacOS
+        # Traer al frente en MacOS
         self.show()
         self.raise_()
         self.activateWindow()
@@ -877,25 +910,25 @@ class EduAIWindow(QMainWindow):
             with open(filename, 'r') as f:
                 data = json.load(f)
 
-            # Check format
+            # Comprobar formato
             if "vocab" in data and "weights" in data:
-                # 1. Restore Vocab - ENFORCE correct mode for this file
+                # 1. Restaurar Vocabulario - FORZAR modo correcto para este archivo
                 target_mode = CONFIG.get("token_mode", "char")
                 self.data_handler.set_state(data["vocab"], force_mode=target_mode)
                 self.vocab_size = self.data_handler.vocab_size
                 
-                # 2. Resize AI Architecture to match restored vocab
+                # 2. Redimensionar Arquitectura IA para coincidir con vocabulario restaurado
                 self.sync_ai_dimensions()
                 
-                # 3. Load Weights
+                # 3. Cargar Pesos
                 self.ai.set_weights_dict(data["weights"])
                 
-                # 4. Update UI
+                # 4. Actualizar UI
                 self.lbl_params.setText(f"Params: {self.ai.total_parameters:,}")
                 self.update_stats()
                 return True, f"Loaded {filename} (Bundled)"
             else:
-                # Legacy format (Just weights) - Fallback
+                # Formato Legado (Solo pesos) - Fallback
                 try:
                     self.ai.set_weights_dict(data) 
                     return True, f"Loaded {filename} (Legacy)"
@@ -909,10 +942,10 @@ class EduAIWindow(QMainWindow):
 
     def log(self, msg):
         self.lbl_last_msg.setText(f"> {msg}")
-        print(f"LOG: {msg}") # Keep console log for debug
+        print(f"LOG: {msg}") # Mantener log en consola para debug
         
     def update_stats(self):
-        # Update Vocab and Mode
+        # Actualizar Vocabulario y Modo
         mode_str = self.data_handler.mode.upper()
         self.lbl_vocab.setText(f"Vocabulario ({mode_str}): {self.data_handler.vocab_size} tokens")
         
@@ -928,7 +961,7 @@ class EduAIWindow(QMainWindow):
             if mode == "char": self.lbl_brain_char.setText(txt)
             else: self.lbl_brain_word.setText(txt)
 
-        # Auto-save periodically if training is active
+        # Auto-guardado periódico si el entrenamiento está activo
         now = time.time()
         if self.worker and self.worker.isRunning() and (now - self.last_save_time > 10):
             try:
@@ -958,8 +991,8 @@ class EduAIWindow(QMainWindow):
                 token_item.setText(repr(token))
                 prob_item.setText(f"{prob*100:.2f}%")
                 
-                # Colorear según probabilidad (Heatmap effect in table)
-                green_val = int(255 * min(1.0, prob * 5)) # Boost visibility
+                # Colorear según probabilidad (Efecto Heatmap en tabla)
+                green_val = int(255 * min(1.0, prob * 5)) # Aumentar visibilidad
                 color = QColor(0, max(100, green_val), 0)
                 token_item.setForeground(QBrush(color))
                 prob_item.setForeground(QBrush(color))
@@ -1038,14 +1071,14 @@ class EduAIWindow(QMainWindow):
             QTimer.singleShot(0, lambda: self.start_training(content))
 
     def toggle_mode(self):
-        # 1. Save current state
+        # 1. Guardar estado actual
         try:
             filename = self.save_brain()
             self.log(f"Estado guardado en {filename}")
         except Exception as e:
             self.log(f"Error guardando estado: {e}")
 
-        # 2. Toggle Config
+        # 2. Alternar Configuración
         current_mode = CONFIG.get("token_mode", "char")
         new_mode = "word" if current_mode == "char" else "char"
         CONFIG["token_mode"] = new_mode
@@ -1059,8 +1092,8 @@ class EduAIWindow(QMainWindow):
             
         self.log(f"CAMBIANDO MODO: {current_mode.upper()} -> {new_mode.upper()}...")
         
-        # 3. Re-initialize everything
-        # Stop any running worker
+        # 3. Reiniciar todo
+        # Detener cualquier worker en ejecución
         if self.worker is not None:
              if self.worker.isRunning():
                  self.worker.terminate()
@@ -1076,8 +1109,8 @@ class EduAIWindow(QMainWindow):
                            self.vocab_size, 
                            CONFIG["learning_rate"])
                            
-        # 4. Load new brain if exists
-        # load_brain handles bundling and resizing automatically!
+        # 4. Cargar nuevo cerebro si existe
+        # load_brain maneja empaquetado y redimensionamiento automáticamente!
         success, msg = self.load_brain()
         if success:
              self.log(f"Memoria restaurada: {msg}")
@@ -1101,13 +1134,13 @@ class EduAIWindow(QMainWindow):
             
             self.lbl_config.setText(f"Neuronas: {CONFIG['hidden_neurons']} | LR: {CONFIG['learning_rate']}")
             self.window_size = CONFIG["input_window"]
-            self.current_context = " " * self.window_size # Reset context on config change
+            self.current_context = " " * self.window_size # Resetear contexto al cambiar config
             self.ai = SimpleAI(self.vocab_size * self.window_size, 
                                CONFIG["hidden_neurons"], 
                                self.vocab_size, 
                                CONFIG["learning_rate"])
             
-            # Update Params Label
+            # Actualizar etiqueta de parámetros
             self.lbl_params.setText(f"Params: {self.ai.total_parameters:,}")
             
             # Recrear UI neuronas CON SCROLL
@@ -1117,7 +1150,7 @@ class EduAIWindow(QMainWindow):
             
             self.scroll_content = QWidget()
             self.scroll_content.setStyleSheet("background-color: transparent;")
-            # FLow Layout
+            # Layout de Flujo
             self.neurons_layout = FlowLayout(self.scroll_content, margin=5, spacing=5)
             
             self.neuron_meters = []
@@ -1158,7 +1191,7 @@ class EduAIWindow(QMainWindow):
             self.lbl_status.setText("Estado: ESPERANDO")
             self.lbl_status.setStyleSheet("color: #ffa500; font-weight: bold;")
             self.log("--- Fin de la respuesta ---")
-            # No limpiamos self.worker aquí para evitar race conditions, 
+            # No limpiamos self.worker aquí para evitar condiciones de carrera, 
             # se limpiará al iniciar la siguiente tarea.
 
     def start_training(self, text):
