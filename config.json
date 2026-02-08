@@ -1,0 +1,8 @@
+{
+    "hidden_neurons": 125,
+    "learning_rate": 0.1,
+    "input_window": 20,
+    "thinking_delay": 0.05,
+    "visualization_mode": "heatmap",
+    "token_mode": "word"
+}

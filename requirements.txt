@@ -1,0 +1,5 @@
+numpy
+PyQt6
+requests
+beautifulsoup4
+pypdf
